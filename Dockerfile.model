@@ -1,0 +1,25 @@
+# Dockerfile for Credit Risk Analysis Model Service
+# Servicio que contiene y sirve el modelo entrenado y preprocesador
+FROM python:3.11-slim
+
+WORKDIR /app
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app
+
+# Install Python dependencies (solo las necesarias para cargar/verificar modelos)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir numpy scikit-learn joblib
+
+# Crear directorios para modelos y datos procesados
+# Los volúmenes se montarán desde el host (solo lectura)
+RUN mkdir -p /app/models /app/data/processed
+
+# El servicio model es un contenedor de datos que mantiene los archivos disponibles
+# No expone puertos, solo mantiene los archivos accesibles vía volúmenes compartidos
+# La API accederá a estos archivos a través del volumen compartido
+
+# Servicio simple que mantiene el contenedor corriendo
+CMD ["python", "-c", "import time; print('Model service running - models available at /app/models'); print('Preprocessor available at /app/data/processed'); [time.sleep(3600) for _ in iter(int, 1)]"]

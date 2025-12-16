@@ -18,8 +18,20 @@ def _deduplicate(names: List[str]) -> List[str]:
     return unique    
 
 def get_datasets() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-
-    column_descriptions = pd.read_excel(config.DATASET_DESCRIPTION)
+    """
+    Carga los datasets. Si DATASET_TEST no existe, retorna None para test.
+    """
+    import os
+    
+    # Intentar leer con openpyxl primero, luego xlrd si es necesario
+    try:
+        column_descriptions = pd.read_excel(config.DATASET_DESCRIPTION, engine='openpyxl')
+    except:
+        try:
+            column_descriptions = pd.read_excel(config.DATASET_DESCRIPTION, engine='xlrd')
+        except:
+            # Si ambos fallan, intentar sin especificar engine
+            column_descriptions = pd.read_excel(config.DATASET_DESCRIPTION)
     col_names = _deduplicate(column_descriptions["Var_Title"].tolist())
 
     app_train = pd.read_csv(
@@ -31,13 +43,19 @@ def get_datasets() -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         encoding="latin1",
         low_memory=False
     )
-    app_test = pd.read_csv(
-        config.DATASET_TEST,
-        sep="\t",
-        header=None,
-        encoding="latin1",
-        low_memory=False
-    )
+    
+    # Si el archivo de test no existe, retornar None
+    app_test = None
+    if os.path.exists(config.DATASET_TEST):
+        app_test = pd.read_csv(
+            config.DATASET_TEST,
+            sep="\t",
+            header=None,
+            names=col_names,
+            na_values=["NULL"],
+            encoding="latin1",
+            low_memory=False
+        )
 
     return app_train, app_test, column_descriptions
 
@@ -46,7 +64,7 @@ def get_feature_target(
 ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
     
     X_train = app_train.drop(columns=['TARGET_LABEL_BAD=1'])
-    y_train = app_train['TARGERT_LABEL_BAD=1']
+    y_train = app_train['TARGET_LABEL_BAD=1']
     X_test = app_test.drop(columns=['TARGET_LABEL_BAD=1'])
     y_test = app_test['TARGET_LABEL_BAD=1']
 

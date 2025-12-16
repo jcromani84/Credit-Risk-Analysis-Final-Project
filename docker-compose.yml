@@ -1,6 +1,21 @@
-version: "3.8"
-
 services:
+  model:
+    build:
+      context: .
+      dockerfile: Dockerfile.model
+    container_name: credit-risk-model
+    volumes:
+      # Volumen compartido para modelo (solo lectura)
+      - ./models:/app/models:ro
+      # Volumen compartido para preprocessor (solo lectura)
+      - ./data/processed:/app/data/processed:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
+    networks:
+      - credit-risk-network
+
   api:
     build:
       context: .
@@ -8,11 +23,37 @@ services:
     container_name: credit-risk-api
     ports:
       - "8000:8000"
+    volumes:
+      # Acceso al modelo desde el servicio model (solo lectura)
+      - ./models:/app/models:ro
+      # Acceso al preprocessor desde el servicio model (solo lectura)
+      - ./data/processed:/app/data/processed:ro
+      # Acceso a datos raw si se necesitan (solo lectura)
+      - ./data/raw:/app/data/raw:ro
+      # Mount para edición en vivo del código API (para desarrollo)
+      - ./src/api:/app/src/api
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - MODEL_SERVICE_URL=http://model:8001
+      - MODEL_VERSION=production # Cambiar aquí para usar diferentes modelos (v1, v2, production, etc.)
+    depends_on:
+      - model
     restart: unless-stopped
     networks:
       - credit-risk-network
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health').read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   ui:
     build:
@@ -22,12 +63,15 @@ services:
     ports:
       - "8501:8501"
     volumes:
-      - ./src/ui:/app/src/ui # Mount for live editing
+      # Mount para edición en vivo del código UI (opcional, para desarrollo)
+      - ./src/ui:/app/src/ui
     environment:
       - API_URL=http://api:8000
       - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
     depends_on:
-      - api
+      api:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - credit-risk-network
